@@ -70,7 +70,7 @@ export default function ModuleManagement() {
   });
 
   const createModuleMutation = useMutation({
-    mutationFn: (data: ModuleFormData) => apiRequest('/api/admin/modules', 'POST', data),
+    mutationFn: (data: ModuleFormData) => apiRequest('POST', '/api/admin/modules', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/modules'] });
       setIsCreateDialogOpen(false);
@@ -91,7 +91,7 @@ export default function ModuleManagement() {
 
   const updateModuleMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<ModuleFormData> }) => 
-      apiRequest(`/api/admin/modules/${id}`, 'PUT', data),
+      apiRequest('PUT', `/api/admin/modules/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/modules'] });
       toast({
@@ -109,7 +109,7 @@ export default function ModuleManagement() {
   });
 
   const deleteModuleMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/admin/modules/${id}`, 'DELETE'),
+    mutationFn: (id: string) => apiRequest('DELETE', `/api/admin/modules/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/modules'] });
       toast({
@@ -127,7 +127,7 @@ export default function ModuleManagement() {
   });
 
   const testModuleMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/admin/modules/${id}/test`, 'POST'),
+    mutationFn: (id: string) => apiRequest('POST', `/api/admin/modules/${id}/test`),
     onSuccess: (data: any, id: string) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/modules'] });
       setIsTestingModule(null);
@@ -320,7 +320,7 @@ export default function ModuleManagement() {
                           <Input 
                             type="number" 
                             placeholder="3000" 
-                            {...field}
+                            value={field.value || ''}
                             onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                             data-testid="input-module-port"
                           />

@@ -10,10 +10,16 @@ const JWT_SECRET = process.env.JWT_SECRET || "neoloc-one-secret-key";
 const JWT_EXPIRES_IN = "24h";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Authentication middleware
+  // Authentication middleware - works with both cookies and Authorization header
   const authenticateToken = async (req: any, res: any, next: any) => {
+    // Try to get token from Authorization header first, then from cookies
+    let token;
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
 
     if (!token) {
       return res.status(401).json({ message: 'Access token required' });
@@ -117,6 +123,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiresAt,
       });
 
+      // Set token as HTTP-only cookie
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      });
+
       // Return user data without password
       const { password: _, ...userWithoutPassword } = user;
       
@@ -136,6 +150,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/logout", authenticateToken, async (req: any, res) => {
     try {
       await storage.deleteSession(req.token);
+      
+      // Clear the token cookie
+      res.clearCookie('token');
+      
       res.json({ message: "Logged out successfully" });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });

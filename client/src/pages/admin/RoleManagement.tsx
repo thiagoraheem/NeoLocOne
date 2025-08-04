@@ -40,7 +40,7 @@ export default function RoleManagement() {
   });
 
   const createRoleMutation = useMutation({
-    mutationFn: (data: RoleFormData) => apiRequest('/api/admin/roles', 'POST', data),
+    mutationFn: (data: RoleFormData) => apiRequest('POST', '/api/admin/roles', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/roles'] });
       setIsCreateDialogOpen(false);
