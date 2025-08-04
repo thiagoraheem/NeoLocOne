@@ -3,7 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -11,6 +11,24 @@ import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neoloc-background" data-testid="loading-screen">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin mx-auto mb-4 text-neoloc-primary rounded-full border-2 border-neoloc-primary border-t-transparent" />
+          <h2 className="text-xl font-semibold text-neoloc-text mb-2">Loading...</h2>
+          <p className="text-gray-600">Initializing NeoLoc One</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
   return (
     <Switch>
       <Route path="/login" component={Login} />
