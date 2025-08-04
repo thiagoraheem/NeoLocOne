@@ -40,12 +40,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Admin-only middleware
+  // Permission-based middleware
+  const requirePermission = (resource: string, action: string) => {
+    return async (req: any, res: any, next: any) => {
+      try {
+        const hasPermission = await storage.userHasPermission(req.user.id, resource, action);
+        if (!hasPermission) {
+          return res.status(403).json({ 
+            message: `Access denied: ${action} permission required for ${resource}` 
+          });
+        }
+        next();
+      } catch (error) {
+        return res.status(500).json({ message: 'Permission check failed' });
+      }
+    };
+  };
+
+  // Admin-only middleware (for backwards compatibility)
   const requireAdmin = (req: any, res: any, next: any) => {
     if (req.user.role !== 'administrator') {
       return res.status(403).json({ message: 'Administrator access required' });
     }
     next();
+  };
+
+  // Role-based middleware
+  const requireRole = (roleName: string) => {
+    return async (req: any, res: any, next: any) => {
+      try {
+        const hasRole = await storage.userHasRole(req.user.id, roleName);
+        if (!hasRole && req.user.role !== 'administrator') {
+          return res.status(403).json({ 
+            message: `Access denied: ${roleName} role required` 
+          });
+        }
+        next();
+      } catch (error) {
+        return res.status(500).json({ message: 'Role check failed' });
+      }
+    };
   };
 
   // Auth routes
@@ -144,11 +178,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Module routes
   app.get("/api/modules", authenticateToken, async (req: any, res) => {
     try {
-      const allModules = await storage.getAllModules();
-      const userModules = allModules.filter(module => 
-        req.user.role === 'administrator' || req.user.moduleAccess.includes(module.name)
-      );
-      res.json(userModules);
+      const modules = await storage.getModulesForUser(req.user.id);
+      res.json(modules);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -235,6 +266,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // RBAC Routes - Roles Management
+  app.get("/api/admin/roles", authenticateToken, requirePermission('system.roles', 'read'), async (req: any, res) => {
+    try {
+      const roles = await storage.getAllRolesWithPermissions();
+      res.json(roles);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/roles", authenticateToken, requirePermission('system.roles', 'write'), async (req: any, res) => {
+    try {
+      const { insertRoleSchema } = await import("@shared/schema");
+      const roleData = insertRoleSchema.parse(req.body);
+      const role = await storage.createRole(roleData);
+      res.status(201).json(role);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // RBAC Routes - Permissions Management
+  app.get("/api/admin/permissions", authenticateToken, requirePermission('system.roles', 'read'), async (req: any, res) => {
+    try {
+      const permissions = await storage.getAllPermissions();
+      res.json(permissions);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Enhanced Admin Module Management
+  app.get("/api/admin/modules", authenticateToken, requirePermission('system.modules', 'read'), async (req: any, res) => {
+    try {
+      const modules = await storage.getAllModules();
+      res.json(modules);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/modules", authenticateToken, requirePermission('system.modules', 'write'), async (req: any, res) => {
+    try {
+      const { insertModuleSchema } = await import("@shared/schema");
+      const moduleData = insertModuleSchema.parse(req.body);
+      const module = await storage.createModule(moduleData);
+      res.status(201).json(module);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/admin/modules/:id", authenticateToken, requirePermission('system.modules', 'write'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const module = await storage.updateModule(id, updates);
+      
+      if (!module) {
+        return res.status(404).json({ message: "Module not found" });
+      }
+      
+      res.json(module);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/admin/modules/:id", authenticateToken, requirePermission('system.modules', 'delete'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const success = await storage.deleteModule(id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Module not found" });
+      }
+      
+      res.json({ message: "Module deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }

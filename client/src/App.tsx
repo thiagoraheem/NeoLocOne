@@ -8,6 +8,9 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Admin from "@/pages/admin";
+import AdminLayout from "@/pages/admin/AdminLayout";
+import RoleManagement from "@/pages/admin/RoleManagement";
+import UserManagement from "@/pages/admin/UserManagement";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -37,9 +40,15 @@ function Router() {
           <Dashboard />
         </ProtectedRoute>
       </Route>
-      <Route path="/admin">
+      <Route path="/admin" component={AdminLayout} />
+      <Route path="/admin/roles">
         <ProtectedRoute requireAdmin>
-          <Admin />
+          <RoleManagement />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/users">
+        <ProtectedRoute requireAdmin>
+          <UserManagement />
         </ProtectedRoute>
       </Route>
       <Route path="/">
