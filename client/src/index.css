@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(20, 14.3%, 4.1%);
+  --muted: hsl(60, 4.8%, 95.9%);
+  --muted-foreground: hsl(25, 5.3%, 44.7%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(20, 14.3%, 4.1%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(20, 14.3%, 4.1%);
+  --border: hsl(20, 5.9%, 90%);
+  --input: hsl(20, 5.9%, 90%);
+  --primary: hsl(207, 70%, 32%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(120, 50%, 48%);
+  --secondary-foreground: hsl(24, 9.8%, 10%);
+  --accent: hsl(35, 100%, 50%);
+  --accent-foreground: hsl(24, 9.8%, 10%);
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(60, 9.1%, 97.8%);
+  --ring: hsl(20, 14.3%, 4.1%);
+  --radius: 0.5rem;
+  
+  /* Custom NeoLoc One colors */
+  --neoloc-primary: hsl(207, 70%, 32%);
+  --neoloc-secondary: hsl(120, 50%, 48%);
+  --neoloc-accent: hsl(35, 100%, 50%);
+  --neoloc-background: hsl(210, 20%, 97%);
+  --neoloc-text: hsl(210, 25%, 15%);
+  --neoloc-card: hsl(0, 0%, 100%);
+}
+
+.dark {
+  --background: hsl(240, 10%, 3.9%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 3.7%, 15.9%);
+  --muted-foreground: hsl(240, 5%, 64.9%);
+  --popover: hsl(240, 10%, 3.9%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 3.9%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 3.7%, 15.9%);
+  --input: hsl(240, 3.7%, 15.9%);
+  --primary: hsl(207, 70%, 32%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(240, 3.7%, 15.9%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(240, 3.7%, 15.9%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(240, 4.9%, 83.9%);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Segoe UI', 'Inter', 'Roboto', system-ui, sans-serif;
+  }
+
+  .enterprise-spacing {
+    padding: 24px;
+  }
+
+  .neoloc-primary {
+    color: var(--neoloc-primary);
+  }
+
+  .neoloc-secondary {
+    color: var(--neoloc-secondary);
+  }
+
+  .neoloc-accent {
+    color: var(--neoloc-accent);
+  }
+
+  .bg-neoloc-primary {
+    background-color: var(--neoloc-primary);
+  }
+
+  .bg-neoloc-secondary {
+    background-color: var(--neoloc-secondary);
+  }
+
+  .bg-neoloc-accent {
+    background-color: var(--neoloc-accent);
+  }
+
+  .bg-neoloc-background {
+    background-color: var(--neoloc-background);
+  }
+
+  .bg-neoloc-card {
+    background-color: var(--neoloc-card);
+  }
+
+  .text-neoloc-text {
+    color: var(--neoloc-text);
+  }
+
+  .hover-lift {
+    transition: all 0.2s ease-in-out;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, var(--neoloc-primary) 0%, hsl(207, 70%, 40%) 100%);
+  }
+
+  .module-card {
+    @apply bg-card rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 cursor-pointer;
+  }
+
+  .module-card:hover {
+    @apply shadow-lg;
+    transform: translateY(-1px);
+  }
+
+  .stat-card {
+    @apply bg-card rounded-xl p-6 shadow-sm border border-gray-200;
+  }
+
+  .enterprise-button {
+    @apply px-6 py-3 rounded-lg font-medium transition-all duration-200 focus:ring-2 focus:ring-offset-2;
+  }
+
+  .enterprise-button-primary {
+    @apply enterprise-button bg-neoloc-primary text-white hover:opacity-90 focus:ring-blue-500;
+  }
+
+  .enterprise-button-secondary {
+    @apply enterprise-button bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500;
+  }
+}
