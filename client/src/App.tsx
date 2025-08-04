@@ -11,6 +11,7 @@ import Admin from "@/pages/admin";
 import AdminLayout from "@/pages/admin/AdminLayout";
 import RoleManagement from "@/pages/admin/RoleManagement";
 import UserManagement from "@/pages/admin/UserManagement";
+import ModuleManagement from "@/pages/admin/ModuleManagement";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -49,6 +50,11 @@ function Router() {
       <Route path="/admin/users">
         <ProtectedRoute requireAdmin>
           <UserManagement />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/modules">
+        <ProtectedRoute requireAdmin>
+          <ModuleManagement />
         </ProtectedRoute>
       </Route>
       <Route path="/">

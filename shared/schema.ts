@@ -156,3 +156,19 @@ export type ModuleWithAccess = Module & {
   hasAccess: boolean;
   requiredPermissions: Permission[];
 };
+
+// Enhanced module types for the management system
+export interface ModuleWithHealth extends Module {
+  healthStatus?: 'healthy' | 'unhealthy' | 'unknown' | 'disabled';
+  lastHealthCheck?: Date;
+  category?: 'core' | 'business' | 'analytics' | 'integration';
+  url: string; // Ensure url property exists
+}
+
+export interface ModuleFavorite {
+  id: string;
+  userId: string;
+  moduleId: string;
+  position: number;
+  createdAt: Date;
+}

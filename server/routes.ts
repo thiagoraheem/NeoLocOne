@@ -308,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced Admin Module Management
   app.get("/api/admin/modules", authenticateToken, requirePermission('system.modules', 'read'), async (req: any, res) => {
     try {
-      const modules = await storage.getAllModules();
+      const modules = await storage.getAllModulesWithHealth();
       res.json(modules);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });

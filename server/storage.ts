@@ -6,6 +6,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
+import type { ModuleWithHealth } from "@shared/schema";
 
 export interface IStorage {
   // User operations
@@ -67,6 +68,11 @@ export interface IStorage {
   // Authorization helpers
   userHasPermission(userId: string, resource: string, action: string): Promise<boolean>;
   userHasRole(userId: string, roleName: string): Promise<boolean>;
+
+  // Enhanced module management
+  getAllModulesWithHealth(): Promise<ModuleWithHealth[]>;
+  updateModuleHealthStatus(id: string, status: 'healthy' | 'unhealthy' | 'unknown' | 'disabled'): Promise<void>;
+  getModulesForUserWithFavorites(userId: string): Promise<ModuleWithHealth[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -725,6 +731,36 @@ export class MemStorage implements IStorage {
   async userHasRole(userId: string, roleName: string): Promise<boolean> {
     const userRoles = await this.getUserRoles(userId);
     return userRoles.some(role => role.name === roleName);
+  }
+
+  // Enhanced module management implementation
+  async getAllModulesWithHealth(): Promise<ModuleWithHealth[]> {
+    const modules = Array.from(this.modules.values());
+    return modules.map(module => ({
+      ...module,
+      url: module.endpoint, // Map endpoint to url
+      healthStatus: 'healthy' as const,
+      lastHealthCheck: new Date(),
+      category: 'business' as const,
+    }));
+  }
+
+  async updateModuleHealthStatus(id: string, status: 'healthy' | 'unhealthy' | 'unknown' | 'disabled'): Promise<void> {
+    const module = this.modules.get(id);
+    if (module) {
+      console.log(`Module ${id} health status updated to: ${status}`);
+    }
+  }
+
+  async getModulesForUserWithFavorites(userId: string): Promise<ModuleWithHealth[]> {
+    const userModules = await this.getModulesForUser(userId);
+    return userModules.map(module => ({
+      ...module,
+      url: module.endpoint, // Map endpoint to url
+      healthStatus: 'healthy' as const,
+      lastHealthCheck: new Date(),
+      category: 'business' as const,
+    }));
   }
 }
 
