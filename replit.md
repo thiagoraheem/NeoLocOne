@@ -31,6 +31,20 @@ Preferred communication style: Simple, everyday language.
   - Edit modal with all configurable fields (URL, port, description, category, etc.)
 - **User Request Fulfilled**: "Na tela de gestão de módulos, não tem a opção para alterar os dados, preciso desses campos para corrigir endereços, portas, etc"
 
+## Single Sign-On (SSO) System - Complete ✓
+- **Date**: August 5, 2025
+- **Status**: Complete SSO implementation with integration guide
+- **Components Implemented**:
+  - JWT-based SSO token generation and validation system
+  - API endpoints: `/api/sso/generate-token`, `/api/sso/validate-token`, `/api/modules/:id/sso-url`
+  - Dashboard integration with automatic SSO module access
+  - Token security with 5-minute expiration and one-time use
+  - Automatic cleanup of expired tokens
+  - Comprehensive integration documentation for external modules
+  - Example module demonstrating complete SSO integration
+- **User Issue Identified**: External modules need SSO integration to work with generated tokens
+- **Solution Provided**: Complete integration guide and working example module
+
 # System Architecture
 
 ## Frontend Architecture

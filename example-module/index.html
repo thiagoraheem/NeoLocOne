@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Módulo Exemplo - NeoLoc SSO</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+        .success {
+            border: 2px solid #4CAF50;
+            background-color: #f0f8f0;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .error {
+            border: 2px solid #f44336;
+            background-color: #fdf0f0;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .user-info {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        button {
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #1976D2;
+        }
+        .logout {
+            background-color: #f44336;
+        }
+        .logout:hover {
+            background-color: #d32f2f;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Módulo Exemplo - Integração SSO</h1>
+        
+        <div id="loading" class="loading">
+            <h2>🔄 Validando autenticação SSO...</h2>
+            <p>Aguarde enquanto verificamos suas credenciais.</p>
+        </div>
+
+        <div id="success" class="success" style="display: none;">
+            <h2>✅ Autenticação SSO Bem-sucedida!</h2>
+            <p>Você foi autenticado automaticamente via NeoLoc One.</p>
+            
+            <div id="user-info" class="user-info">
+                <!-- Dados do usuário serão inseridos aqui -->
+            </div>
+            
+            <button onclick="showModuleFeatures()">Acessar Funcionalidades do Módulo</button>
+            <button onclick="logout()" class="logout">Sair</button>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <h2>❌ Falha na Autenticação SSO</h2>
+            <p id="error-message">Não foi possível validar sua autenticação.</p>
+            <button onclick="redirectToLogin()">Fazer Login Manual</button>
+        </div>
+
+        <div id="module-content" style="display: none;">
+            <h2>🎯 Funcionalidades do Módulo</h2>
+            <p>Agora você está dentro do módulo com acesso completo!</p>
+            
+            <div class="user-info">
+                <h3>Suas Informações:</h3>
+                <div id="user-details"></div>
+            </div>
+            
+            <h3>Ações Disponíveis:</h3>
+            <button onclick="performAction('create')">Criar Item</button>
+            <button onclick="performAction('read')">Listar Itens</button>
+            <button onclick="performAction('update')">Atualizar Item</button>
+            <button onclick="performAction('delete')">Excluir Item</button>
+            
+            <div id="action-result" style="margin-top: 20px;"></div>
+            
+            <button onclick="goBack()" style="margin-top: 20px;">Voltar ao Início</button>
+        </div>
+
+        <div id="manual-login" style="display: none;">
+            <h2>🔑 Login Manual</h2>
+            <p>Faça login manualmente se o SSO não funcionou:</p>
+            <form onsubmit="handleManualLogin(event)">
+                <div style="margin: 10px 0;">
+                    <label>Email:</label><br>
+                    <input type="email" id="email" required style="width: 100%; padding: 8px; margin-top: 5px;">
+                </div>
+                <div style="margin: 10px 0;">
+                    <label>Senha:</label><br>
+                    <input type="password" id="password" required style="width: 100%; padding: 8px; margin-top: 5px;">
+                </div>
+                <button type="submit">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        
+        // Função principal - executa quando a página carrega
+        window.onload = function() {
+            console.log('Módulo carregado - verificando SSO...');
+            
+            // Capturar parâmetros da URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const ssoToken = urlParams.get('sso_token');
+            const userId = urlParams.get('user_id');
+            
+            console.log('Parâmetros SSO:', { ssoToken: !!ssoToken, userId });
+            
+            if (ssoToken && userId) {
+                // Tentar autenticação SSO
+                validateSSOToken(ssoToken, userId);
+            } else {
+                // Verificar se já está logado
+                const savedUser = localStorage.getItem('user');
+                if (savedUser) {
+                    currentUser = JSON.parse(savedUser);
+                    showSuccess();
+                } else {
+                    showError('Parâmetros SSO não encontrados na URL.');
+                }
+            }
+        };
+        
+        // Validar token SSO com o NeoLoc One
+        async function validateSSOToken(token, userId) {
+            try {
+                console.log('Validando token SSO...');
+                
+                // ID do módulo - deve corresponder ao ID no NeoLoc One
+                const moduleId = getModuleId();
+                
+                const response = await fetch('http://localhost:5000/api/sso/validate-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        token: token,
+                        moduleId: moduleId
+                    })
+                });
+                
+                console.log('Resposta da validação:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Token válido:', data);
+                    
+                    if (data.valid && data.userData) {
+                        currentUser = data.userData;
+                        
+                        // Salvar dados do usuário
+                        localStorage.setItem('user', JSON.stringify(currentUser));
+                        sessionStorage.setItem('authenticated', 'true');
+                        
+                        showSuccess();
+                    } else {
+                        showError('Token SSO inválido ou expirado.');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    showError(`Erro na validação: ${errorData.message}`);
+                }
+            } catch (error) {
+                console.error('Erro na validação SSO:', error);
+                showError(`Erro de conexão: ${error.message}`);
+            }
+        }
+        
+        // Obter ID do módulo (normalmente seria configurado)
+        function getModuleId() {
+            // Em um ambiente real, isso seria configurado no módulo
+            // Por agora, vamos usar o primeiro módulo disponível
+            return 'module-example-id';
+        }
+        
+        // Mostrar sucesso na autenticação
+        function showSuccess() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('success').style.display = 'block';
+            
+            // Mostrar informações do usuário
+            const userInfo = document.getElementById('user-info');
+            userInfo.innerHTML = `
+                <h3>Bem-vindo, ${currentUser.fullName}!</h3>
+                <p><strong>Email:</strong> ${currentUser.email}</p>
+                <p><strong>Função:</strong> ${currentUser.role}</p>
+                <p><strong>ID:</strong> ${currentUser.id}</p>
+                <pre>${JSON.stringify(currentUser, null, 2)}</pre>
+            `;
+        }
+        
+        // Mostrar erro na autenticação
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('success').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error-message').textContent = message;
+        }
+        
+        // Mostrar funcionalidades do módulo
+        function showModuleFeatures() {
+            document.getElementById('success').style.display = 'none';
+            document.getElementById('module-content').style.display = 'block';
+            
+            const userDetails = document.getElementById('user-details');
+            userDetails.innerHTML = `
+                <p><strong>Nome:</strong> ${currentUser.fullName}</p>
+                <p><strong>Email:</strong> ${currentUser.email}</p>
+                <p><strong>Função:</strong> ${getRoleDescription(currentUser.role)}</p>
+                <p><strong>Permissões:</strong> ${getPermissionsForRole(currentUser.role)}</p>
+            `;
+        }
+        
+        // Simular ações do módulo
+        function performAction(action) {
+            const result = document.getElementById('action-result');
+            const actions = {
+                create: 'Novo item criado com sucesso!',
+                read: 'Lista de itens carregada (10 itens encontrados)',
+                update: 'Item atualizado com sucesso!',
+                delete: 'Item excluído com sucesso!'
+            };
+            
+            result.innerHTML = `
+                <div class="success">
+                    <h4>Ação: ${action.toUpperCase()}</h4>
+                    <p>${actions[action]}</p>
+                    <p><small>Executado por: ${currentUser.fullName} (${currentUser.role})</small></p>
+                </div>
+            `;
+        }
+        
+        // Voltar ao início
+        function goBack() {
+            document.getElementById('module-content').style.display = 'none';
+            document.getElementById('success').style.display = 'block';
+        }
+        
+        // Logout
+        function logout() {
+            localStorage.removeItem('user');
+            sessionStorage.removeItem('authenticated');
+            window.location.href = 'http://localhost:5000/login';
+        }
+        
+        // Redirecionar para login manual
+        function redirectToLogin() {
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('manual-login').style.display = 'block';
+        }
+        
+        // Handle manual login
+        function handleManualLogin(event) {
+            event.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            // Simular login manual (em um sistema real, validaria com seu backend)
+            alert('Login manual não implementado neste exemplo. Use o SSO através do NeoLoc One.');
+        }
+        
+        // Utilitários
+        function getRoleDescription(role) {
+            const descriptions = {
+                administrator: 'Administrador - Acesso completo',
+                manager: 'Gerente - Acesso de gestão',
+                operator: 'Operador - Acesso operacional',
+                viewer: 'Visualizador - Apenas leitura'
+            };
+            return descriptions[role] || role;
+        }
+        
+        function getPermissionsForRole(role) {
+            const permissions = {
+                administrator: 'Criar, Ler, Atualizar, Excluir, Administrar',
+                manager: 'Criar, Ler, Atualizar, Excluir',
+                operator: 'Criar, Ler, Atualizar',
+                viewer: 'Apenas Ler'
+            };
+            return permissions[role] || 'Permissões limitadas';
+        }
+    </script>
+</body>
+</html>
