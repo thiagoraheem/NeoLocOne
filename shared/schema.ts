@@ -19,12 +19,17 @@ export const modules = pgTable("modules", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   displayName: text("display_name").notNull(),
-  description: text("description").notNull(),
-  icon: text("icon").notNull(),
-  port: integer("port").notNull(),
-  endpoint: text("endpoint").notNull(),
+  description: text("description"),
+  icon: text("icon").notNull().default("Grid3X3"),
+  port: integer("port"),
+  endpoint: text("endpoint"),
+  url: text("url").notNull(),
+  category: text("category").notNull().default("business"),
   isActive: boolean("is_active").notNull().default(true),
-  color: text("color").notNull(),
+  color: text("color"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  lastHealthCheck: timestamp("last_health_check"),
+  healthStatus: text("health_status").default("unknown"),
 });
 
 export const sessions = pgTable("sessions", {
@@ -89,6 +94,12 @@ export const insertModuleSchema = createInsertSchema(modules).pick({
   description: true,
   icon: true,
   port: true,
+  endpoint: true,
+  color: true,
+}).extend({
+  url: z.string().url("Must be a valid URL"),
+  category: z.enum(['core', 'business', 'analytics', 'integration']).default('business'),
+}).omit({
   endpoint: true,
   color: true,
 });

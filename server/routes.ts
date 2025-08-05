@@ -378,6 +378,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/admin/modules/:id/test", authenticateToken, requirePermission('system.modules', 'write'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const module = await storage.getModule(id);
+      
+      if (!module) {
+        return res.status(404).json({ message: "Module not found" });
+      }
+
+      // Simple health check by trying to connect to the module URL
+      try {
+        const response = await fetch(module.url, {
+          method: 'GET',
+          timeout: 5000,
+        });
+        
+        const status = response.ok ? 'healthy' : 'unhealthy';
+        
+        // Update module health status
+        await storage.updateModule(id, {
+          healthStatus: status,
+          lastHealthCheck: new Date(),
+        });
+        
+        res.json({ status, lastCheck: new Date() });
+      } catch (error) {
+        // Update module as unhealthy
+        await storage.updateModule(id, {
+          healthStatus: 'unhealthy',
+          lastHealthCheck: new Date(),
+        });
+        
+        res.json({ status: 'unhealthy', lastCheck: new Date() });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/admin/modules", authenticateToken, requireAdmin, async (req: any, res) => {
     try {
       const modules = await storage.getAllModules();
