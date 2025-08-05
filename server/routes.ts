@@ -417,10 +417,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/modules", authenticateToken, requireAdmin, async (req: any, res) => {
+  // Dashboard stats endpoint
+  app.get("/api/dashboard/stats", authenticateToken, async (req: any, res) => {
     try {
-      const modules = await storage.getAllModules();
-      res.json(modules);
+      const totalUsers = (await storage.getAllUsers()).length;
+      const activeUsers = (await storage.getAllUsers()).filter(u => u.isActive).length;
+      const totalModules = (await storage.getAllModules()).length;
+      const activeModules = (await storage.getAllModules()).filter(m => m.isActive).length;
+      
+      res.json({
+        totalUsers,
+        activeUsers,
+        totalModules,
+        activeModules,
+      });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }

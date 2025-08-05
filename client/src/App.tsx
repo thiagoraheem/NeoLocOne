@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/components/auth/protected-route";
+import AppLayout from "@/components/layout/AppLayout";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Admin from "@/pages/admin";
@@ -38,28 +39,38 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/dashboard">
         <ProtectedRoute>
-          <Dashboard />
+          <AppLayout>
+            <Dashboard />
+          </AppLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin" component={AdminLayout} />
       <Route path="/admin/roles">
         <ProtectedRoute requireAdmin>
-          <RoleManagement />
+          <AppLayout>
+            <RoleManagement />
+          </AppLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/users">
         <ProtectedRoute requireAdmin>
-          <UserManagement />
+          <AppLayout>
+            <UserManagement />
+          </AppLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/modules">
         <ProtectedRoute requireAdmin>
-          <ModuleManagement />
+          <AppLayout>
+            <ModuleManagement />
+          </AppLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/">
         <ProtectedRoute>
-          <Dashboard />
+          <AppLayout>
+            <Dashboard />
+          </AppLayout>
         </ProtectedRoute>
       </Route>
       {/* Fallback to 404 */}

@@ -170,7 +170,6 @@ export type ModuleWithAccess = Module & {
 
 // Enhanced module types for the management system
 export interface ModuleWithHealth extends Module {
-  healthStatus?: 'healthy' | 'unhealthy' | 'unknown' | 'disabled';
   category: 'core' | 'business' | 'analytics' | 'integration';
   url: string; // Ensure url property exists
 }
