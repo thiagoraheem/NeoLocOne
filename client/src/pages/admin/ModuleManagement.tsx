@@ -60,6 +60,7 @@ const iconOptions = [
 
 export default function ModuleManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedModule, setSelectedModule] = useState<ModuleWithHealth | null>(null);
   const [isTestingModule, setIsTestingModule] = useState<string | null>(null);
   const { toast } = useToast();
@@ -94,6 +95,9 @@ export default function ModuleManagement() {
       apiRequest('PUT', `/api/admin/modules/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/modules'] });
+      setIsEditDialogOpen(false);
+      setSelectedModule(null);
+      editForm.reset();
       toast({
         title: "Module updated",
         description: "The module has been updated successfully.",
@@ -160,8 +164,46 @@ export default function ModuleManagement() {
     },
   });
 
+  const editForm = useForm<ModuleFormData>({
+    resolver: zodResolver(moduleFormSchema),
+    defaultValues: {
+      name: "",
+      displayName: "",
+      description: "",
+      url: "",
+      port: undefined,
+      icon: "Grid3X3",
+      category: "business",
+      isActive: true,
+    },
+  });
+
   const onSubmit = (data: ModuleFormData) => {
     createModuleMutation.mutate(data);
+  };
+
+  const onEditSubmit = (data: ModuleFormData) => {
+    if (selectedModule) {
+      updateModuleMutation.mutate({
+        id: selectedModule.id,
+        data: data
+      });
+    }
+  };
+
+  const openEditDialog = (module: ModuleWithHealth) => {
+    setSelectedModule(module);
+    editForm.reset({
+      name: module.name,
+      displayName: module.displayName,
+      description: module.description || "",
+      url: module.url,
+      port: module.port || undefined,
+      icon: module.icon,
+      category: module.category,
+      isActive: module.isActive,
+    });
+    setIsEditDialogOpen(true);
   };
 
   const toggleModuleStatus = (module: ModuleWithHealth) => {
@@ -503,7 +545,7 @@ export default function ModuleManagement() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setSelectedModule(module)}
+                      onClick={() => openEditDialog(module)}
                       data-testid={`button-edit-${module.name}`}
                     >
                       <Settings className="h-4 w-4" />
@@ -617,6 +659,199 @@ export default function ModuleManagement() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Edit Module Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-edit-module">
+          <DialogHeader>
+            <DialogTitle>Edit Module</DialogTitle>
+            <DialogDescription>
+              Update the module configuration and settings.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Internal Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., inventory_system" {...field} data-testid="edit-input-module-name" />
+                      </FormControl>
+                      <FormDescription>
+                        Unique identifier (lowercase, no spaces)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="displayName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Display Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Inventory System" {...field} data-testid="edit-input-module-display-name" />
+                      </FormControl>
+                      <FormDescription>
+                        User-friendly name
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <FormField
+                control={editForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Brief description of the module's purpose"
+                        {...field}
+                        data-testid="edit-input-module-description"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="url"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Module URL</FormLabel>
+                      <FormControl>
+                        <Input placeholder="https://module.example.com" {...field} data-testid="edit-input-module-url" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Port (Optional)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="3000" 
+                          value={field.value || ''}
+                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                          data-testid="edit-input-module-port"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="icon"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Icon</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="edit-select-module-icon">
+                            <SelectValue placeholder="Select an icon" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {iconOptions.map((icon) => (
+                            <SelectItem key={icon.value} value={icon.value}>
+                              {icon.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="edit-select-module-category">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="core">Core System</SelectItem>
+                          <SelectItem value="business">Business Logic</SelectItem>
+                          <SelectItem value="analytics">Analytics & Reports</SelectItem>
+                          <SelectItem value="integration">Integration</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={editForm.control}
+                name="isActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Active Status</FormLabel>
+                      <FormDescription>
+                        Enable this module for users
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="edit-switch-module-active"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsEditDialogOpen(false)}
+                  data-testid="button-cancel-edit-module"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={updateModuleMutation.isPending}
+                  data-testid="button-submit-edit-module"
+                >
+                  {updateModuleMutation.isPending ? "Updating..." : "Update Module"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
