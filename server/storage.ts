@@ -140,8 +140,13 @@ export class MemStorage implements IStorage {
         icon: "fas fa-boxes",
         port: 3001,
         endpoint: "localhost:3001",
+        url: "http://localhost:3001",
+        category: "business",
         isActive: true,
         color: "bg-primary/10 text-primary",
+        createdAt: new Date(),
+        lastHealthCheck: null,
+        healthStatus: "unknown",
       },
       {
         id: randomUUID(),
@@ -151,8 +156,13 @@ export class MemStorage implements IStorage {
         icon: "fas fa-shopping-cart",
         port: 3002,
         endpoint: "localhost:3002",
+        url: "http://localhost:3002",
+        category: "business",
         isActive: true,
         color: "bg-secondary/10 text-secondary",
+        createdAt: new Date(),
+        lastHealthCheck: null,
+        healthStatus: "unknown",
       },
       {
         id: randomUUID(),
@@ -162,8 +172,13 @@ export class MemStorage implements IStorage {
         icon: "fas fa-warehouse",
         port: 3003,
         endpoint: "localhost:3003",
+        url: "http://localhost:3003",
+        category: "business",
         isActive: true,
         color: "bg-accent/10 text-accent",
+        createdAt: new Date(),
+        lastHealthCheck: null,
+        healthStatus: "unknown",
       },
       {
         id: randomUUID(),
@@ -173,8 +188,13 @@ export class MemStorage implements IStorage {
         icon: "fas fa-clipboard-list",
         port: 3004,
         endpoint: "localhost:3004",
+        url: "http://localhost:3004",
+        category: "business",
         isActive: true,
         color: "bg-purple-100 text-purple-600",
+        createdAt: new Date(),
+        lastHealthCheck: null,
+        healthStatus: "unknown",
       },
       {
         id: randomUUID(),
@@ -184,8 +204,13 @@ export class MemStorage implements IStorage {
         icon: "fas fa-handshake",
         port: 3005,
         endpoint: "localhost:3005",
+        url: "http://localhost:3005",
+        category: "business",
         isActive: true,
         color: "bg-green-100 text-green-600",
+        createdAt: new Date(),
+        lastHealthCheck: null,
+        healthStatus: "unknown",
       },
       {
         id: randomUUID(),
@@ -195,8 +220,13 @@ export class MemStorage implements IStorage {
         icon: "fas fa-chart-pie",
         port: 3006,
         endpoint: "localhost:3006",
+        url: "http://localhost:3006",
+        category: "business",
         isActive: true,
         color: "bg-blue-100 text-blue-600",
+        createdAt: new Date(),
+        lastHealthCheck: null,
+        healthStatus: "unknown",
       },
       {
         id: randomUUID(),
@@ -206,8 +236,13 @@ export class MemStorage implements IStorage {
         icon: "fas fa-truck",
         port: 3007,
         endpoint: "localhost:3007",
+        url: "http://localhost:3007",
+        category: "business",
         isActive: true,
         color: "bg-indigo-100 text-indigo-600",
+        createdAt: new Date(),
+        lastHealthCheck: null,
+        healthStatus: "unknown",
       },
       {
         id: randomUUID(),
@@ -217,8 +252,13 @@ export class MemStorage implements IStorage {
         icon: "fas fa-wrench",
         port: 3008,
         endpoint: "localhost:3008",
+        url: "http://localhost:3008",
+        category: "business",
         isActive: true,
         color: "bg-red-100 text-red-600",
+        createdAt: new Date(),
+        lastHealthCheck: null,
+        healthStatus: "unknown",
       },
       {
         id: randomUUID(),
@@ -228,8 +268,13 @@ export class MemStorage implements IStorage {
         icon: "fas fa-chart-bar",
         port: 3009,
         endpoint: "localhost:3009",
+        url: "http://localhost:3009",
+        category: "analytics",
         isActive: true,
         color: "bg-yellow-100 text-yellow-600",
+        createdAt: new Date(),
+        lastHealthCheck: null,
+        healthStatus: "unknown",
       },
     ];
 
@@ -450,6 +495,15 @@ export class MemStorage implements IStorage {
       ...insertModule,
       id,
       isActive: true,
+      category: insertModule.category || "business",
+      endpoint: null,
+      color: null,
+      description: insertModule.description || null,
+      icon: insertModule.icon || "Grid3X3",
+      port: insertModule.port || null,
+      createdAt: new Date(),
+      lastHealthCheck: null,
+      healthStatus: "unknown",
     };
     this.modules.set(id, module);
     return module;
@@ -738,10 +792,10 @@ export class MemStorage implements IStorage {
     const modules = Array.from(this.modules.values());
     return modules.map(module => ({
       ...module,
-      url: module.endpoint, // Map endpoint to url
-      healthStatus: 'healthy' as const,
-      lastHealthCheck: new Date(),
-      category: 'business' as const,
+      url: module.url, // Use url property directly
+      healthStatus: module.healthStatus as 'healthy' | 'unhealthy' | 'unknown' | 'disabled' || 'healthy',
+      lastHealthCheck: module.lastHealthCheck || new Date(),
+      category: module.category as 'core' | 'business' | 'analytics' | 'integration',
     }));
   }
 
@@ -756,10 +810,10 @@ export class MemStorage implements IStorage {
     const userModules = await this.getModulesForUser(userId);
     return userModules.map(module => ({
       ...module,
-      url: module.endpoint, // Map endpoint to url
-      healthStatus: 'healthy' as const,
-      lastHealthCheck: new Date(),
-      category: 'business' as const,
+      url: module.url, // Use url property directly
+      healthStatus: module.healthStatus as 'healthy' | 'unhealthy' | 'unknown' | 'disabled' || 'healthy',
+      lastHealthCheck: module.lastHealthCheck || new Date(),
+      category: module.category as 'core' | 'business' | 'analytics' | 'integration',
     }));
   }
 }
