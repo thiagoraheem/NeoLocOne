@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { ModuleWithHealth } from "@shared/schema";
 import { 
   Grid3X3, 
@@ -42,6 +44,7 @@ interface DashboardStats {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [favoriteModules, setFavoriteModules] = useState<string[]>([]);
@@ -88,8 +91,35 @@ export default function Dashboard() {
     }
   };
 
+  // SSO module access mutation
+  const ssoUrlMutation = useMutation({
+    mutationFn: (moduleId: string) => 
+      apiRequest('POST', `/api/modules/${moduleId}/sso-url`),
+    onSuccess: (data: { ssoUrl: string; expiresIn: number }) => {
+      // Open module with SSO authentication
+      window.open(data.ssoUrl, '_blank', 'noopener,noreferrer');
+      toast({
+        title: "Module Access",
+        description: "Opening module with secure authentication...",
+      });
+    },
+    onError: (error: any) => {
+      console.error('SSO URL generation failed:', error);
+      toast({
+        title: "Access Error",
+        description: error.message || "Failed to generate secure access to module",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const openModuleWithSSO = (module: ModuleWithHealth) => {
+    ssoUrlMutation.mutate(module.id);
+  };
+
   const openModule = (module: ModuleWithHealth) => {
-    window.open(module.url, '_blank', 'noopener,noreferrer');
+    // Use SSO for secure module access
+    openModuleWithSSO(module);
   };
 
   const toggleFavorite = (moduleId: string) => {
@@ -256,8 +286,9 @@ export default function Dashboard() {
                         size="sm" 
                         onClick={() => openModule(module)}
                         className="flex-1"
+                        disabled={ssoUrlMutation.isPending}
                       >
-                        Open
+                        {ssoUrlMutation.isPending ? "Connecting..." : "Open"}
                         <ExternalLink className="ml-2 h-3 w-3" />
                       </Button>
                     </div>
@@ -326,8 +357,9 @@ export default function Dashboard() {
                         size="sm" 
                         onClick={() => openModule(module)}
                         className="flex-1"
+                        disabled={ssoUrlMutation.isPending}
                       >
-                        Open
+                        {ssoUrlMutation.isPending ? "Connecting..." : "Open"}
                         <ExternalLink className="ml-2 h-3 w-3" />
                       </Button>
                     </div>

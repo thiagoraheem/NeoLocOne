@@ -2,7 +2,7 @@ import {
   type User, type InsertUser, type Module, type InsertModule, type Session, type InsertSession,
   type Role, type InsertRole, type Permission, type InsertPermission, 
   type RolePermission, type InsertRolePermission, type UserRole, type InsertUserRole,
-  type UserWithRoles, type RoleWithPermissions
+  type UserWithRoles, type RoleWithPermissions, type SsoToken, type InsertSsoToken
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -73,6 +73,14 @@ export interface IStorage {
   getAllModulesWithHealth(): Promise<ModuleWithHealth[]>;
   updateModuleHealthStatus(id: string, status: 'healthy' | 'unhealthy' | 'unknown' | 'disabled'): Promise<void>;
   getModulesForUserWithFavorites(userId: string): Promise<ModuleWithHealth[]>;
+
+  // SSO Token operations
+  createSsoToken(ssoToken: InsertSsoToken): Promise<SsoToken>;
+  getSsoToken(token: string): Promise<SsoToken | undefined>;
+  validateSsoToken(token: string, moduleId: string): Promise<SsoToken | undefined>;
+  markSsoTokenAsUsed(token: string, ipAddress: string, userAgent: string): Promise<void>;
+  deleteExpiredSsoTokens(): Promise<void>;
+  deleteUserSsoTokens(userId: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -83,6 +91,7 @@ export class MemStorage implements IStorage {
   private permissions: Map<string, Permission>;
   private rolePermissions: Map<string, RolePermission>;
   private userRoles: Map<string, UserRole>;
+  private ssoTokens: Map<string, SsoToken>;
 
   constructor() {
     this.users = new Map();
@@ -92,6 +101,7 @@ export class MemStorage implements IStorage {
     this.permissions = new Map();
     this.rolePermissions = new Map();
     this.userRoles = new Map();
+    this.ssoTokens = new Map();
     this.initializeDefaultData();
   }
 
@@ -815,6 +825,108 @@ export class MemStorage implements IStorage {
       lastHealthCheck: module.lastHealthCheck || new Date(),
       category: module.category as 'core' | 'business' | 'analytics' | 'integration',
     }));
+  }
+
+  // SSO Token operations implementation
+  async createSsoToken(insertSsoToken: InsertSsoToken): Promise<SsoToken> {
+    const id = randomUUID();
+    const ssoToken: SsoToken = {
+      ...insertSsoToken,
+      id,
+      createdAt: new Date(),
+      usedAt: null,
+    };
+    this.ssoTokens.set(ssoToken.token, ssoToken);
+    return ssoToken;
+  }
+
+  async getSsoToken(token: string): Promise<SsoToken | undefined> {
+    const ssoToken = this.ssoTokens.get(token);
+    if (ssoToken && ssoToken.expiresAt > new Date()) {
+      return ssoToken;
+    }
+    if (ssoToken) {
+      this.ssoTokens.delete(token);
+    }
+    return undefined;
+  }
+
+  async validateSsoToken(token: string, moduleId: string): Promise<SsoToken | undefined> {
+    const ssoToken = await this.getSsoToken(token);
+    if (ssoToken && ssoToken.moduleId === moduleId && !ssoToken.usedAt) {
+      return ssoToken;
+    }
+    return undefined;
+  }
+
+  async markSsoTokenAsUsed(token: string, ipAddress: string, userAgent: string): Promise<void> {
+    const ssoToken = this.ssoTokens.get(token);
+    if (ssoToken) {
+      const updatedToken = {
+        ...ssoToken,
+        usedAt: new Date(),
+        ipAddress,
+        userAgent,
+      };
+      this.ssoTokens.set(token, updatedToken);
+    }
+  }
+
+  async deleteExpiredSsoTokens(): Promise<void> {
+    const now = new Date();
+    const tokensToDelete: string[] = [];
+    this.ssoTokens.forEach((ssoToken, token) => {
+      if (ssoToken.expiresAt < now) {
+        tokensToDelete.push(token);
+      }
+    });
+    tokensToDelete.forEach(token => this.ssoTokens.delete(token));
+  }
+
+  async deleteUserSsoTokens(userId: string): Promise<void> {
+    const tokensToDelete: string[] = [];
+    this.ssoTokens.forEach((ssoToken, token) => {
+      if (ssoToken.userId === userId) {
+        tokensToDelete.push(token);
+      }
+    });
+    tokensToDelete.forEach(token => this.ssoTokens.delete(token));
+  }
+
+  // Override getModulesForUser to include user access permissions
+  async getModulesForUser(userId: string): Promise<ModuleWithHealth[]> {
+    const user = await this.getUser(userId);
+    if (!user) return [];
+
+    const allModules = Array.from(this.modules.values());
+    
+    // Administrators have access to all modules
+    if (user.role === 'administrator') {
+      return allModules.map(module => ({
+        ...module,
+        url: module.url,
+        healthStatus: module.healthStatus as 'healthy' | 'unhealthy' | 'unknown' | 'disabled' || 'healthy',
+        lastHealthCheck: module.lastHealthCheck || new Date(),
+        category: module.category as 'core' | 'business' | 'analytics' | 'integration',
+      }));
+    }
+
+    // Filter modules based on user permissions
+    const userModules: ModuleWithHealth[] = [];
+    for (const module of allModules) {
+      const hasAccess = await this.userHasPermission(userId, module.name, 'read');
+      if (hasAccess) {
+        userModules.push({
+          ...module,
+          url: module.url,
+          healthStatus: module.healthStatus as 'healthy' | 'unhealthy' | 'unknown' | 'disabled' || 'healthy',
+          lastHealthCheck: module.lastHealthCheck || new Date(),
+          category: module.category as 'core' | 'business' | 'analytics' | 'integration',
+        });
+      }
+    }
+
+    return userModules;
   }
 }
 

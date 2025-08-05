@@ -8,6 +8,7 @@ import { z } from "zod";
 
 const JWT_SECRET = process.env.JWT_SECRET || "neoloc-one-secret-key";
 const JWT_EXPIRES_IN = "24h";
+const SSO_TOKEN_EXPIRES_IN = "5m"; // 5 minutes for security
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication middleware - works with both cookies and Authorization header
@@ -461,9 +462,174 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Clean up expired sessions periodically
+  // SSO Token generation endpoint for module authentication
+  app.post('/api/sso/generate-token', authenticateToken, async (req: any, res) => {
+    try {
+      const { moduleId } = req.body;
+      
+      if (!moduleId) {
+        return res.status(400).json({ message: 'Module ID is required' });
+      }
+
+      // Verify user has access to the module
+      const module = await storage.getModule(moduleId);
+      if (!module) {
+        return res.status(404).json({ message: 'Module not found' });
+      }
+
+      // Check if user has permission to access this module
+      const hasAccess = await storage.userHasPermission(req.user.id, module.name, 'read');
+      if (!hasAccess && req.user.role !== 'administrator') {
+        return res.status(403).json({ message: 'Access denied to this module' });
+      }
+
+      // Generate SSO token with short expiration
+      const ssoToken = jwt.sign(
+        { 
+          userId: req.user.id,
+          moduleId: moduleId,
+          email: req.user.email,
+          fullName: req.user.fullName,
+          role: req.user.role,
+          type: 'sso'
+        },
+        JWT_SECRET,
+        { expiresIn: SSO_TOKEN_EXPIRES_IN }
+      );
+
+      // Store token in database for tracking
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+      await storage.createSsoToken({
+        userId: req.user.id,
+        moduleId: moduleId,
+        token: ssoToken,
+        expiresAt: expiresAt,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'] || null,
+      });
+
+      res.json({ 
+        token: ssoToken,
+        expiresIn: 300, // 5 minutes in seconds
+        moduleUrl: module.url,
+        userData: {
+          id: req.user.id,
+          email: req.user.email,
+          fullName: req.user.fullName,
+          role: req.user.role
+        }
+      });
+    } catch (error) {
+      console.error('SSO token generation error:', error);
+      res.status(500).json({ message: 'Failed to generate SSO token' });
+    }
+  });
+
+  // SSO Token validation endpoint for modules
+  app.post('/api/sso/validate-token', async (req: any, res) => {
+    try {
+      const { token, moduleId } = req.body;
+      
+      if (!token || !moduleId) {
+        return res.status(400).json({ message: 'Token and module ID are required' });
+      }
+
+      // Validate token
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      
+      if (decoded.type !== 'sso' || decoded.moduleId !== moduleId) {
+        return res.status(401).json({ message: 'Invalid SSO token' });
+      }
+
+      // Check if token exists and hasn't been used
+      const ssoToken = await storage.validateSsoToken(token, moduleId);
+      if (!ssoToken) {
+        return res.status(401).json({ message: 'Token expired or already used' });
+      }
+
+      // Get user data
+      const user = await storage.getUser(decoded.userId);
+      if (!user || !user.isActive) {
+        return res.status(401).json({ message: 'User not found or inactive' });
+      }
+
+      // Mark token as used
+      await storage.markSsoTokenAsUsed(token, req.ip, req.headers['user-agent'] || '');
+
+      res.json({
+        valid: true,
+        userData: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
+          moduleAccess: user.moduleAccess
+        }
+      });
+    } catch (error) {
+      console.error('SSO token validation error:', error);
+      res.status(401).json({ message: 'Invalid or expired token' });
+    }
+  });
+
+  // Get SSO-enabled URL for module access
+  app.post('/api/modules/:id/sso-url', authenticateToken, async (req: any, res) => {
+    try {
+      const moduleId = req.params.id;
+      const module = await storage.getModule(moduleId);
+      
+      if (!module) {
+        return res.status(404).json({ message: 'Module not found' });
+      }
+
+      // Check access permission
+      const hasAccess = await storage.userHasPermission(req.user.id, module.name, 'read');
+      if (!hasAccess && req.user.role !== 'administrator') {
+        return res.status(403).json({ message: 'Access denied to this module' });
+      }
+
+      // Generate SSO token
+      const ssoToken = jwt.sign(
+        { 
+          userId: req.user.id,
+          moduleId: moduleId,
+          email: req.user.email,
+          fullName: req.user.fullName,
+          role: req.user.role,
+          type: 'sso'
+        },
+        JWT_SECRET,
+        { expiresIn: SSO_TOKEN_EXPIRES_IN }
+      );
+
+      // Store token
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      await storage.createSsoToken({
+        userId: req.user.id,
+        moduleId: moduleId,
+        token: ssoToken,
+        expiresAt: expiresAt,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'] || null,
+      });
+
+      // Create SSO URL with token
+      const ssoUrl = `${module.url}?sso_token=${encodeURIComponent(ssoToken)}&user_id=${encodeURIComponent(req.user.id)}`;
+
+      res.json({ 
+        ssoUrl: ssoUrl,
+        expiresIn: 300
+      });
+    } catch (error) {
+      console.error('SSO URL generation error:', error);
+      res.status(500).json({ message: 'Failed to generate SSO URL' });
+    }
+  });
+
+  // Clean up expired sessions and SSO tokens periodically
   setInterval(async () => {
     await storage.deleteExpiredSessions();
+    await storage.deleteExpiredSsoTokens();
   }, 60 * 60 * 1000); // Every hour
 
   const httpServer = createServer(app);

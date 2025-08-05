@@ -40,6 +40,19 @@ export const sessions = pgTable("sessions", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// SSO tokens for module authentication
+export const ssoTokens = pgTable("sso_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  moduleId: varchar("module_id").notNull().references(() => modules.id),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  usedAt: timestamp("used_at"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+});
+
 // RBAC Tables
 export const roles = pgTable("roles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -136,6 +149,15 @@ export const insertUserRoleSchema = createInsertSchema(userRoles).pick({
   assignedBy: true,
 });
 
+export const insertSsoTokenSchema = createInsertSchema(ssoTokens).pick({
+  userId: true,
+  moduleId: true,
+  token: true,
+  expiresAt: true,
+  ipAddress: true,
+  userAgent: true,
+});
+
 // Type exports
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -153,6 +175,8 @@ export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
 export type RolePermission = typeof rolePermissions.$inferSelect;
 export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
 export type UserRole = typeof userRoles.$inferSelect;
+export type InsertSsoToken = z.infer<typeof insertSsoTokenSchema>;
+export type SsoToken = typeof ssoTokens.$inferSelect;
 
 // Extended types for joined data
 export type UserWithRoles = User & {
