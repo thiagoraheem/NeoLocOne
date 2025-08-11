@@ -390,10 +390,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Simple health check by trying to connect to the module URL
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
         const response = await fetch(module.url, {
           method: 'GET',
-          timeout: 5000,
+          signal: controller.signal,
         });
+        
+        clearTimeout(timeoutId);
         
         const status = response.ok ? 'healthy' : 'unhealthy';
         

@@ -24,6 +24,7 @@ export interface IStorage {
   getModuleByName(name: string): Promise<Module | undefined>;
   getAllModules(): Promise<Module[]>;
   getModulesForUser(userId: string): Promise<Module[]>;
+  getModulesForUserWithHealth(userId: string): Promise<ModuleWithHealth[]>;
   createModule(module: InsertModule): Promise<Module>;
   updateModule(id: string, updates: Partial<Module>): Promise<Module | undefined>;
   deleteModule(id: string): Promise<boolean>;
@@ -425,30 +426,25 @@ export class MemStorage implements IStorage {
     );
   }
 
+
   async getModulesForUser(userId: string): Promise<Module[]> {
-    const user = await this.getUserWithRoles(userId);
-    if (!user) return [];
-
-    // If user is admin, return all active modules
-    if (user.role === 'administrator') {
-      return Array.from(this.modules.values()).filter(m => m.isActive);
-    }
-
-    // Get modules based on user permissions
-    const userPermissions = await this.getUserPermissions(userId);
-    const accessibleModules = new Set<string>();
-
-    userPermissions.forEach(permission => {
-      if (permission.action === 'read' || permission.action === 'write' || permission.action === 'admin') {
-        if (!permission.resource.startsWith('system.')) {
-          accessibleModules.add(permission.resource);
-        }
-      }
-    });
-
-    return Array.from(this.modules.values()).filter(m => 
-      m.isActive && accessibleModules.has(m.name)
-    );
+    const userModulesWithHealth = await this.getModulesForUserWithHealth(userId);
+    return userModulesWithHealth.map(m => ({
+      id: m.id,
+      name: m.name,
+      displayName: m.displayName,
+      description: m.description,
+      icon: m.icon,
+      port: m.port,
+      endpoint: m.endpoint,
+      url: m.url,
+      category: m.category,
+      isActive: m.isActive,
+      color: m.color,
+      createdAt: m.createdAt,
+      lastHealthCheck: m.lastHealthCheck,
+      healthStatus: m.healthStatus,
+    }));
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
@@ -835,6 +831,8 @@ export class MemStorage implements IStorage {
       id,
       createdAt: new Date(),
       usedAt: null,
+      ipAddress: insertSsoToken.ipAddress || null,
+      userAgent: insertSsoToken.userAgent || null,
     };
     this.ssoTokens.set(ssoToken.token, ssoToken);
     return ssoToken;
@@ -893,8 +891,8 @@ export class MemStorage implements IStorage {
     tokensToDelete.forEach(token => this.ssoTokens.delete(token));
   }
 
-  // Override getModulesForUser to include user access permissions
-  async getModulesForUser(userId: string): Promise<ModuleWithHealth[]> {
+  // Enhanced getModulesForUser to include user access permissions and health info
+  async getModulesForUserWithHealth(userId: string): Promise<ModuleWithHealth[]> {
     const user = await this.getUser(userId);
     if (!user) return [];
 
