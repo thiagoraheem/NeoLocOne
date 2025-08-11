@@ -96,16 +96,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const user = await storage.getUserByEmail(email);
       if (!user || !user.isActive) {
+        // Log failed login attempt for non-existent user
+        if (user && !user.isActive) {
+          await storage.logUserActivity({
+            userId: user.id,
+            action: "login_failed_inactive",
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'] || null,
+            details: "Account is inactive",
+            severity: "warning",
+          });
+        }
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
       const isValidPassword = await bcrypt.compare(password, user.password);
       if (!isValidPassword) {
+        // Log failed login attempt
+        await storage.logUserActivity({
+          userId: user.id,
+          action: "login_failed",
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'] || null,
+          details: "Invalid password",
+          severity: "warning",
+        });
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Update last login
+      // Update last login and log successful login
       await storage.updateUser(user.id, { lastLogin: new Date() });
+      await storage.logUserActivity({
+        userId: user.id,
+        action: "login_success",
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'] || null,
+        details: "Successful login",
+        severity: "info",
+      });
 
       // Create JWT token
       const token = jwt.sign(
@@ -151,6 +179,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/logout", authenticateToken, async (req: any, res) => {
     try {
       await storage.deleteSession(req.token);
+      
+      // Log logout activity
+      await storage.logUserActivity({
+        userId: req.user.id,
+        action: "logout",
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'] || null,
+        details: "User logged out",
+        severity: "info",
+      });
       
       // Clear the token cookie
       res.clearCookie('token');
@@ -224,9 +262,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes
   app.get("/api/admin/users", authenticateToken, requireAdmin, async (req: any, res) => {
     try {
-      const users = await storage.getAllUsers();
+      const users = await storage.getAllUsersWithProfiles();
       const usersWithoutPasswords = users.map(({ password, ...user }) => user);
       res.json(usersWithoutPasswords);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/admin/users/:id", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = await storage.getUserWithProfile(id);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const { password, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -375,6 +429,156 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ message: "Module deleted successfully" });
     } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // User Profile Management
+  app.get("/api/users/:id/profile", authenticateToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Users can only access their own profile unless they're an admin
+      if (req.user.id !== id && req.user.role !== 'administrator') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const profile = await storage.getUserProfile(id);
+      res.json(profile || {});
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/users/:id/profile", authenticateToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Users can only update their own profile unless they're an admin
+      if (req.user.id !== id && req.user.role !== 'administrator') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { insertUserProfileSchema } = await import("@shared/schema");
+      const profileData = insertUserProfileSchema.parse(req.body);
+      
+      let profile = await storage.getUserProfile(id);
+      if (!profile) {
+        profile = await storage.createUserProfile({ ...profileData, userId: id });
+      } else {
+        profile = await storage.updateUserProfile(id, profileData);
+      }
+      
+      res.json(profile);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // User Security Settings
+  app.get("/api/users/:id/security", authenticateToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Users can only access their own security settings unless they're an admin
+      if (req.user.id !== id && req.user.role !== 'administrator') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const settings = await storage.getUserSecuritySettings(id);
+      if (settings) {
+        // Don't expose sensitive information like 2FA secrets
+        const { twoFactorSecret, recoveryCodesHash, ...safeSettings } = settings;
+        res.json(safeSettings);
+      } else {
+        res.json({});
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/users/:id/security", authenticateToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Users can only update their own security settings unless they're an admin
+      if (req.user.id !== id && req.user.role !== 'administrator') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { insertUserSecuritySettingsSchema } = await import("@shared/schema");
+      const securityData = insertUserSecuritySettingsSchema.parse(req.body);
+      
+      let settings = await storage.getUserSecuritySettings(id);
+      if (!settings) {
+        settings = await storage.createUserSecuritySettings({ ...securityData, userId: id });
+      } else {
+        settings = await storage.updateUserSecuritySettings(id, securityData);
+      }
+      
+      // Don't expose sensitive information
+      const { twoFactorSecret, recoveryCodesHash, ...safeSettings } = settings;
+      res.json(safeSettings);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Activity Logs
+  app.get("/api/users/:id/activity", authenticateToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { limit = 50 } = req.query;
+      
+      // Users can only access their own activity logs unless they're an admin
+      if (req.user.id !== id && req.user.role !== 'administrator') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const logs = await storage.getUserActivityLogs(id, parseInt(limit as string));
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/admin/activity", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const { limit = 100 } = req.query;
+      const logs = await storage.getRecentActivityLogs(parseInt(limit as string));
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Security Policies
+  app.get("/api/admin/security-policies", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const policies = await storage.getAllSecurityPolicies();
+      res.json(policies);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/security-policies", authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+      const { insertSecurityPolicySchema } = await import("@shared/schema");
+      const policyData = insertSecurityPolicySchema.parse(req.body);
+      const policy = await storage.createSecurityPolicy(policyData);
+      res.status(201).json(policy);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
       res.status(500).json({ message: "Internal server error" });
     }
   });

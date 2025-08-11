@@ -12,6 +12,7 @@ import Admin from "@/pages/admin";
 import AdminLayout from "@/pages/admin/AdminLayout";
 import RoleManagement from "@/pages/admin/RoleManagement";
 import UserManagement from "@/pages/admin/UserManagement";
+import EnhancedUserManagement from "@/pages/admin/EnhancedUserManagement";
 import ModuleManagement from "@/pages/admin/ModuleManagement";
 import NotFound from "@/pages/not-found";
 
@@ -56,6 +57,13 @@ function Router() {
         <ProtectedRoute requireAdmin>
           <AppLayout>
             <UserManagement />
+          </AppLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/enhanced-users">
+        <ProtectedRoute requireAdmin>
+          <AppLayout>
+            <EnhancedUserManagement />
           </AppLayout>
         </ProtectedRoute>
       </Route>

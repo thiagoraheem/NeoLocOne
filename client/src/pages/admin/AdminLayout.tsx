@@ -25,6 +25,12 @@ const adminNavItems = [
     description: "Manage user accounts and access",
   },
   {
+    title: "Enhanced Users",
+    href: "/admin/enhanced-users",
+    icon: User,
+    description: "Advanced user management with profiles",
+  },
+  {
     title: "Roles & Permissions",
     href: "/admin/roles",
     icon: Shield,

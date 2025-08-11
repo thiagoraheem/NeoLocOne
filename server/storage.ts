@@ -2,7 +2,10 @@ import {
   type User, type InsertUser, type Module, type InsertModule, type Session, type InsertSession,
   type Role, type InsertRole, type Permission, type InsertPermission, 
   type RolePermission, type InsertRolePermission, type UserRole, type InsertUserRole,
-  type UserWithRoles, type RoleWithPermissions, type SsoToken, type InsertSsoToken
+  type UserWithRoles, type RoleWithPermissions, type SsoToken, type InsertSsoToken,
+  type UserWithProfile, type UserActivityLog, type InsertUserActivityLog,
+  type UserSecuritySettings, type InsertUserSecuritySettings, 
+  type UserProfile, type InsertUserProfile, type SecurityPolicy, type InsertSecurityPolicy
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -13,11 +16,34 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserWithRoles(id: string): Promise<UserWithRoles | undefined>;
+  getUserWithProfile(id: string): Promise<UserWithProfile | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
   getAllUsers(): Promise<User[]>;
   getAllUsersWithRoles(): Promise<UserWithRoles[]>;
+  getAllUsersWithProfiles(): Promise<UserWithProfile[]>;
+  
+  // User profile operations
+  getUserProfile(userId: string): Promise<UserProfile | undefined>;
+  createUserProfile(profile: InsertUserProfile): Promise<UserProfile>;
+  updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile | undefined>;
+  
+  // User security operations
+  getUserSecuritySettings(userId: string): Promise<UserSecuritySettings | undefined>;
+  createUserSecuritySettings(settings: InsertUserSecuritySettings): Promise<UserSecuritySettings>;
+  updateUserSecuritySettings(userId: string, updates: Partial<UserSecuritySettings>): Promise<UserSecuritySettings | undefined>;
+  
+  // Activity logging
+  logUserActivity(log: InsertUserActivityLog): Promise<UserActivityLog>;
+  getUserActivityLogs(userId: string, limit?: number): Promise<UserActivityLog[]>;
+  getRecentActivityLogs(limit?: number): Promise<UserActivityLog[]>;
+  
+  // Security policies
+  getSecurityPolicy(name: string): Promise<SecurityPolicy | undefined>;
+  getAllSecurityPolicies(): Promise<SecurityPolicy[]>;
+  createSecurityPolicy(policy: InsertSecurityPolicy): Promise<SecurityPolicy>;
+  updateSecurityPolicy(id: string, updates: Partial<SecurityPolicy>): Promise<SecurityPolicy | undefined>;
   
   // Module operations
   getModule(id: string): Promise<Module | undefined>;
@@ -93,6 +119,10 @@ export class MemStorage implements IStorage {
   private rolePermissions: Map<string, RolePermission>;
   private userRoles: Map<string, UserRole>;
   private ssoTokens: Map<string, SsoToken>;
+  private userProfiles: Map<string, UserProfile>;
+  private userSecuritySettings: Map<string, UserSecuritySettings>;
+  private userActivityLogs: Map<string, UserActivityLog>;
+  private securityPolicies: Map<string, SecurityPolicy>;
 
   constructor() {
     this.users = new Map();
@@ -103,6 +133,10 @@ export class MemStorage implements IStorage {
     this.rolePermissions = new Map();
     this.userRoles = new Map();
     this.ssoTokens = new Map();
+    this.userProfiles = new Map();
+    this.userSecuritySettings = new Map();
+    this.userActivityLogs = new Map();
+    this.securityPolicies = new Map();
     this.initializeDefaultData();
   }
 
@@ -925,6 +959,165 @@ export class MemStorage implements IStorage {
     }
 
     return userModules;
+  }
+
+  // New user profile methods
+  async getUserWithProfile(id: string): Promise<UserWithProfile | undefined> {
+    const user = await this.getUserWithRoles(id);
+    if (!user) return undefined;
+
+    const profile = this.userProfiles.get(id);
+    const securitySettings = this.userSecuritySettings.get(id);
+    const recentActivity = Array.from(this.userActivityLogs.values())
+      .filter(log => log.userId === id)
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, 10);
+
+    return {
+      ...user,
+      profile,
+      securitySettings,
+      recentActivity
+    };
+  }
+
+  async getAllUsersWithProfiles(): Promise<UserWithProfile[]> {
+    const users = Array.from(this.users.values());
+    return Promise.all(
+      users.map(user => this.getUserWithProfile(user.id) as Promise<UserWithProfile>)
+    );
+  }
+
+  async getUserProfile(userId: string): Promise<UserProfile | undefined> {
+    return this.userProfiles.get(userId);
+  }
+
+  async createUserProfile(insertProfile: InsertUserProfile): Promise<UserProfile> {
+    const id = randomUUID();
+    const profile: UserProfile = {
+      id,
+      userId: insertProfile.userId,
+      avatar: insertProfile.avatar ?? null,
+      phoneNumber: insertProfile.phoneNumber ?? null,
+      department: insertProfile.department ?? null,
+      position: insertProfile.position ?? null,
+      manager: insertProfile.manager ?? null,
+      timezone: insertProfile.timezone ?? "America/Sao_Paulo",
+      language: insertProfile.language ?? "pt-BR",
+      theme: insertProfile.theme ?? "system",
+      notifications: insertProfile.notifications ?? "{}",
+      dashboardLayout: insertProfile.dashboardLayout ?? "{}",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.userProfiles.set(insertProfile.userId, profile);
+    return profile;
+  }
+
+  async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile | undefined> {
+    const profile = this.userProfiles.get(userId);
+    if (!profile) return undefined;
+
+    const updatedProfile = { ...profile, ...updates, updatedAt: new Date() };
+    this.userProfiles.set(userId, updatedProfile);
+    return updatedProfile;
+  }
+
+  async getUserSecuritySettings(userId: string): Promise<UserSecuritySettings | undefined> {
+    return this.userSecuritySettings.get(userId);
+  }
+
+  async createUserSecuritySettings(insertSettings: InsertUserSecuritySettings): Promise<UserSecuritySettings> {
+    const id = randomUUID();
+    const settings: UserSecuritySettings = {
+      id,
+      userId: insertSettings.userId,
+      twoFactorEnabled: insertSettings.twoFactorEnabled ?? false,
+      twoFactorSecret: insertSettings.twoFactorSecret ?? null,
+      recoveryCodesHash: insertSettings.recoveryCodesHash ?? null,
+      passwordExpiresAt: insertSettings.passwordExpiresAt ?? null,
+      forcePasswordChange: insertSettings.forcePasswordChange ?? false,
+      accountLocked: insertSettings.accountLocked ?? false,
+      lockReason: insertSettings.lockReason ?? null,
+      lockedAt: insertSettings.lockedAt ?? null,
+      failedLoginAttempts: insertSettings.failedLoginAttempts ?? 0,
+      lastFailedLoginAt: insertSettings.lastFailedLoginAt ?? null,
+      lastPasswordChangeAt: insertSettings.lastPasswordChangeAt ?? new Date(),
+      updatedAt: new Date(),
+    };
+    this.userSecuritySettings.set(insertSettings.userId, settings);
+    return settings;
+  }
+
+  async updateUserSecuritySettings(userId: string, updates: Partial<UserSecuritySettings>): Promise<UserSecuritySettings | undefined> {
+    const settings = this.userSecuritySettings.get(userId);
+    if (!settings) return undefined;
+
+    const updatedSettings = { ...settings, ...updates, updatedAt: new Date() };
+    this.userSecuritySettings.set(userId, updatedSettings);
+    return updatedSettings;
+  }
+
+  async logUserActivity(insertLog: InsertUserActivityLog): Promise<UserActivityLog> {
+    const id = randomUUID();
+    const log: UserActivityLog = {
+      id,
+      userId: insertLog.userId,
+      action: insertLog.action,
+      module: insertLog.module ?? null,
+      ipAddress: insertLog.ipAddress ?? null,
+      userAgent: insertLog.userAgent ?? null,
+      details: insertLog.details ?? null,
+      severity: insertLog.severity ?? "info",
+      timestamp: new Date(),
+    };
+    this.userActivityLogs.set(id, log);
+    return log;
+  }
+
+  async getUserActivityLogs(userId: string, limit: number = 50): Promise<UserActivityLog[]> {
+    return Array.from(this.userActivityLogs.values())
+      .filter(log => log.userId === userId)
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, limit);
+  }
+
+  async getRecentActivityLogs(limit: number = 100): Promise<UserActivityLog[]> {
+    return Array.from(this.userActivityLogs.values())
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, limit);
+  }
+
+  async getSecurityPolicy(name: string): Promise<SecurityPolicy | undefined> {
+    return Array.from(this.securityPolicies.values()).find(policy => policy.name === name);
+  }
+
+  async getAllSecurityPolicies(): Promise<SecurityPolicy[]> {
+    return Array.from(this.securityPolicies.values());
+  }
+
+  async createSecurityPolicy(insertPolicy: InsertSecurityPolicy): Promise<SecurityPolicy> {
+    const id = randomUUID();
+    const policy: SecurityPolicy = {
+      id,
+      name: insertPolicy.name,
+      description: insertPolicy.description,
+      isEnabled: insertPolicy.isEnabled ?? true,
+      config: insertPolicy.config,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.securityPolicies.set(id, policy);
+    return policy;
+  }
+
+  async updateSecurityPolicy(id: string, updates: Partial<SecurityPolicy>): Promise<SecurityPolicy | undefined> {
+    const policy = this.securityPolicies.get(id);
+    if (!policy) return undefined;
+
+    const updatedPolicy = { ...policy, ...updates, updatedAt: new Date() };
+    this.securityPolicies.set(id, updatedPolicy);
+    return updatedPolicy;
   }
 }
 

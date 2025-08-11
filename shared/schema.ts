@@ -53,6 +53,66 @@ export const ssoTokens = pgTable("sso_tokens", {
   userAgent: text("user_agent"),
 });
 
+// User activity logs for audit trail
+export const userActivityLogs = pgTable("user_activity_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  action: text("action").notNull(), // login, logout, module_access, password_change, etc.
+  module: text("module"), // module accessed if applicable
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  details: text("details"), // JSON string with additional details
+  timestamp: timestamp("timestamp").notNull().default(sql`now()`),
+  severity: text("severity").notNull().default("info"), // info, warning, error, critical
+});
+
+// User security settings
+export const userSecuritySettings = pgTable("user_security_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  twoFactorSecret: text("two_factor_secret"), // encrypted TOTP secret
+  recoveryCodesHash: text("recovery_codes_hash"), // encrypted backup codes
+  passwordExpiresAt: timestamp("password_expires_at"),
+  forcePasswordChange: boolean("force_password_change").notNull().default(false),
+  accountLocked: boolean("account_locked").notNull().default(false),
+  lockReason: text("lock_reason"),
+  lockedAt: timestamp("locked_at"),
+  failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+  lastFailedLoginAt: timestamp("last_failed_login_at"),
+  lastPasswordChangeAt: timestamp("last_password_change_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// System-wide security policies
+export const securityPolicies = pgTable("security_policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  description: text("description").notNull(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  config: text("config").notNull(), // JSON configuration
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// User preferences and profile settings
+export const userProfiles = pgTable("user_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  avatar: text("avatar"), // URL or base64 encoded image
+  phoneNumber: text("phone_number"),
+  department: text("department"),
+  position: text("position"),
+  manager: varchar("manager").references(() => users.id),
+  timezone: text("timezone").default("America/Sao_Paulo"),
+  language: text("language").default("pt-BR"),
+  theme: text("theme").default("system"), // light, dark, system
+  notifications: text("notifications").default("{}"), // JSON preferences
+  dashboardLayout: text("dashboard_layout").default("{}"), // JSON layout config
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 // RBAC Tables
 export const roles = pgTable("roles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -158,6 +218,65 @@ export const insertSsoTokenSchema = createInsertSchema(ssoTokens).pick({
   userAgent: true,
 });
 
+export const insertUserActivityLogSchema = createInsertSchema(userActivityLogs).pick({
+  userId: true,
+  action: true,
+  module: true,
+  ipAddress: true,
+  userAgent: true,
+  details: true,
+  severity: true,
+});
+
+export const insertUserSecuritySettingsSchema = createInsertSchema(userSecuritySettings).pick({
+  userId: true,
+  twoFactorEnabled: true,
+  twoFactorSecret: true,
+  recoveryCodesHash: true,
+  passwordExpiresAt: true,
+  forcePasswordChange: true,
+  accountLocked: true,
+  lockReason: true,
+  lockedAt: true,
+  failedLoginAttempts: true,
+  lastFailedLoginAt: true,
+  lastPasswordChangeAt: true,
+});
+
+export const insertSecurityPolicySchema = createInsertSchema(securityPolicies).pick({
+  name: true,
+  description: true,
+  isEnabled: true,
+  config: true,
+});
+
+export const insertUserProfileSchema = createInsertSchema(userProfiles).pick({
+  userId: true,
+  avatar: true,
+  phoneNumber: true,
+  department: true,
+  position: true,
+  manager: true,
+  timezone: true,
+  language: true,
+  theme: true,
+  notifications: true,
+  dashboardLayout: true,
+});
+
+// Password policy validation schema
+export const passwordPolicySchema = z.object({
+  minLength: z.number().min(6).max(128).default(8),
+  requireUppercase: z.boolean().default(true),
+  requireLowercase: z.boolean().default(true),
+  requireNumbers: z.boolean().default(true),
+  requireSpecialChars: z.boolean().default(true),
+  maxAge: z.number().min(0).default(90), // days
+  preventReuse: z.number().min(0).max(24).default(5), // last N passwords
+  maxFailedAttempts: z.number().min(1).max(10).default(5),
+  lockoutDuration: z.number().min(1).max(1440).default(30), // minutes
+});
+
 // Type exports
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -177,10 +296,26 @@ export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
 export type UserRole = typeof userRoles.$inferSelect;
 export type InsertSsoToken = z.infer<typeof insertSsoTokenSchema>;
 export type SsoToken = typeof ssoTokens.$inferSelect;
+export type InsertUserActivityLog = z.infer<typeof insertUserActivityLogSchema>;
+export type UserActivityLog = typeof userActivityLogs.$inferSelect;
+export type InsertUserSecuritySettings = z.infer<typeof insertUserSecuritySettingsSchema>;
+export type UserSecuritySettings = typeof userSecuritySettings.$inferSelect;
+export type InsertSecurityPolicy = z.infer<typeof insertSecurityPolicySchema>;
+export type SecurityPolicy = typeof securityPolicies.$inferSelect;
+export type InsertUserProfile = z.infer<typeof insertUserProfileSchema>;
+export type UserProfile = typeof userProfiles.$inferSelect;
+export type PasswordPolicy = z.infer<typeof passwordPolicySchema>;
 
 // Extended types for joined data
 export type UserWithRoles = User & {
   roles: (Role & { permissions: Permission[] })[];
+};
+
+export type UserWithProfile = User & {
+  profile?: UserProfile;
+  securitySettings?: UserSecuritySettings;
+  roles: (Role & { permissions: Permission[] })[];
+  recentActivity?: UserActivityLog[];
 };
 
 export type RoleWithPermissions = Role & {
