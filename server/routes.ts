@@ -521,8 +521,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Don't expose sensitive information
-      const { twoFactorSecret, recoveryCodesHash, ...safeSettings } = settings;
-      res.json(safeSettings);
+      if (settings) {
+        const { twoFactorSecret, recoveryCodesHash, ...safeSettings } = settings;
+        res.json(safeSettings);
+      } else {
+        res.json({});
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
